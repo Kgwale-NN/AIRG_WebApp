@@ -1,0 +1,8 @@
+# NetBeans files 
+nbproject/ 
+build/ 
+dist/ 
+target/ 
+*.war 
+config.properties 
+*.log 
