@@ -66,7 +66,7 @@
             StringBuilder sql = new StringBuilder();
             sql.append("SELECT i.id, i.name, i.unit, COUNT(DISTINCT ri.recipe_id) as usage_count ");
             sql.append("FROM airg_ingredients i ");
-            sql.append("JOIN airg_recpe_ingredients ri ON i.id = ri.ingredient_id ");
+            sql.append("JOIN airg_recipe_ingredients ri ON i.id = ri.ingredient_id ");
             sql.append("JOIN airg_recipes r ON ri.recipe_id = r.id ");
             sql.append("WHERE r.created_date BETWEEN ? AND ? ");
             if (!cuisineFilter.isEmpty()) {

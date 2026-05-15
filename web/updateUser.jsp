@@ -24,7 +24,8 @@
         String id = request.getParameter("id");
         String message = "";
         String messageType = "";
-        List<String> errors = new ArrayList<>();
+        // ✅ FIXED: diamond operator replaced with explicit type
+        List<String> errors = new ArrayList<String>();
         
         if(id == null || id.trim().isEmpty()) {
             response.sendRedirect("listUsers.jsp");

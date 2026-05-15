@@ -25,7 +25,8 @@
         String oldRecipeId = request.getParameter("recipe_id");
         String message = "";
         String messageType = "";
-        List<String> errors = new ArrayList<>();
+        // ✅ FIXED: diamond operator replaced with explicit type
+        List<String> errors = new ArrayList<String>();
         
         // Preserve selected new values for repopulation on error
         String selectedNewUserId = "";
