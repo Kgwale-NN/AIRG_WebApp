@@ -363,6 +363,7 @@
         <% } %>
     </div>
 
+    <% if (isAdmin) { %>
     <div class="stats-row">
         <div class="stat-item"><div class="stat-number"><%= totalRecipes %></div><div class="stat-label">recipes</div></div>
         <div class="stat-item"><div class="stat-number"><%= totalUsers %></div><div class="stat-label">users</div></div>
@@ -370,6 +371,7 @@
         <div class="stat-item"><div class="stat-number"><%= totalFavorites %></div><div class="stat-label">favourites</div></div>
         <div class="stat-item"><div class="stat-number"><%= totalRatings %></div><div class="stat-label">ratings</div></div>
     </div>
+    <% } %>
 
     <div class="section-title">
         <h2>management hub</h2>
@@ -382,7 +384,7 @@
             <p>Full CRUD: list, add, edit, delete. Core of your app.</p>
             <div class="btn-group">
                 <a href="listRecipes.jsp" class="btn btn-primary">view / manage</a>
-                <% if (isAdmin) { %>
+                <% if (isLoggedIn) { %>
                     <a href="insertRecipe.jsp" class="btn btn-outline">+ new recipe</a>
                 <% } %>
             </div>
@@ -449,7 +451,7 @@
         </div>
         <% } %>
 
-        <!-- ========== USER TOOLS (visible to all logged‑in users) ========== -->
+        <!-- USER TOOLS (visible to all logged‑in users) -->
         <% if (isLoggedIn) { %>
         <div class="card">
             <h3><span>🛠️</span> User Tools</h3>
@@ -463,7 +465,7 @@
             </div>
         </div>
 
-        <!-- ========== AI RECIPE GENERATOR CARD ========== -->
+        <!-- AI RECIPE GENERATOR CARD -->
         <div class="card">
             <h3><span>🤖</span> AI Recipe Generator</h3>
             <p>Enter ingredients you have – AI creates a brand new recipe just for you!</p>
@@ -473,7 +475,7 @@
         </div>
         <% } %>
 
-        <!-- Additional Features (placeholders) – only visible to admin -->
+        <!-- Additional Features – only visible to admin -->
         <% if (isAdmin) { %>
         <div class="card">
             <h3><span>🔧</span>System & Administration</h3>

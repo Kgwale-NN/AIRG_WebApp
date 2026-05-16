@@ -1,6 +1,46 @@
 <%@ page import="java.sql.*, airg.DatabaseConnection, java.util.*" %>
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ include file="WEB-INF/adminCheck.jsp" %>
+<%@ include file="WEB-INF/loginCheck.jsp" %>
+<%
+    int loggedUserId = (Integer) session.getAttribute("userId");
+    String userRole = (String) session.getAttribute("userRole");
+    boolean isAdmin = "admin".equals(userRole);
+    
+    String recipeIdParam = request.getParameter("recipe_id");
+    if (recipeIdParam == null || recipeIdParam.trim().isEmpty()) {
+        response.sendRedirect("listRecipes.jsp");
+        return;
+    }
+    int recipeId = Integer.parseInt(recipeIdParam);
+    
+    // Ownership check
+    Connection checkConn = null;
+    PreparedStatement checkStmt = null;
+    ResultSet checkRs = null;
+    try {
+        checkConn = DatabaseConnection.getConnection();
+        checkStmt = checkConn.prepareStatement("SELECT created_by FROM airg_recipes WHERE id = ?");
+        checkStmt.setInt(1, recipeId);
+        checkRs = checkStmt.executeQuery();
+        if (checkRs.next()) {
+            int ownerId = checkRs.getInt("created_by");
+            if (!isAdmin && ownerId != loggedUserId) {
+                response.sendRedirect("listRecipes.jsp");
+                return;
+            }
+        } else {
+            response.sendRedirect("listRecipes.jsp");
+            return;
+        }
+    } catch (Exception e) {
+        response.sendRedirect("listRecipes.jsp");
+        return;
+    } finally {
+        if (checkRs != null) try { checkRs.close(); } catch(Exception e) {}
+        if (checkStmt != null) try { checkStmt.close(); } catch(Exception e) {}
+        if (checkConn != null) DatabaseConnection.closeConnection(checkConn);
+    }
+%>
 <!DOCTYPE html>
 <html>
 <head>
@@ -22,22 +62,48 @@
     <div class="form-container">
         <%
         String message = "", messageType = "";
-        String recipeId = request.getParameter("recipe_id");
         List<String> errors = new ArrayList<String>();
 
         String currentTitle = "", currentDescription = "", currentInstructions = "";
         String currentCuisine = "", currentPrepTime = "", currentServings = "";
 
-        if (request.getMethod().equalsIgnoreCase("POST") && recipeId != null && !recipeId.isEmpty()) {
+        // Load current data for the form
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+            pstmt = conn.prepareStatement("SELECT * FROM airg_recipes WHERE id = ?");
+            pstmt.setInt(1, recipeId);
+            rs = pstmt.executeQuery();
+            if (rs.next()) {
+                currentTitle = rs.getString("title");
+                currentDescription = rs.getString("description") != null ? rs.getString("description") : "";
+                currentInstructions = rs.getString("instructions");
+                currentCuisine = rs.getString("cuisine_type") != null ? rs.getString("cuisine_type") : "";
+                currentPrepTime = String.valueOf(rs.getInt("prep_time"));
+                currentServings = String.valueOf(rs.getInt("servings"));
+            } else {
+                out.println("<p class='error'>Recipe not found.</p>");
+                return;
+            }
+        } catch (Exception e) {
+            out.println("<p class='error'>Error loading recipe: " + e.getMessage() + "</p>");
+            return;
+        } finally {
+            if (rs != null) try { rs.close(); } catch(Exception e) {}
+            if (pstmt != null) try { pstmt.close(); } catch(Exception e) {}
+            if (conn != null) DatabaseConnection.closeConnection(conn);
+        }
+
+        // Process update
+        if (request.getMethod().equalsIgnoreCase("POST")) {
             String title = request.getParameter("title");
             String description = request.getParameter("description");
             String instructions = request.getParameter("instructions");
             String cuisine_type = request.getParameter("cuisine_type");
             String prep_time_str = request.getParameter("prep_time");
             String servings_str = request.getParameter("servings");
-
-            currentTitle = title; currentDescription = description; currentInstructions = instructions;
-            currentCuisine = cuisine_type; currentPrepTime = prep_time_str; currentServings = servings_str;
 
             // Empty checks
             if (title == null || title.trim().isEmpty()) errors.add("Title is required.");
@@ -64,17 +130,29 @@
             if (title != null && title.length() > 200) errors.add("Title too long (max 200).");
 
             if (errors.isEmpty()) {
-                Connection conn = null; PreparedStatement pstmt = null;
+                Connection connUp = null;
+                PreparedStatement pstmtUp = null;
                 try {
-                    conn = DatabaseConnection.getConnection();
+                    connUp = DatabaseConnection.getConnection();
                     String sql = "UPDATE airg_recipes SET title=?, description=?, instructions=?, cuisine_type=?, prep_time=?, servings=? WHERE id=?";
-                    pstmt = conn.prepareStatement(sql);
-                    pstmt.setString(1, title); pstmt.setString(2, description); pstmt.setString(3, instructions);
-                    pstmt.setString(4, cuisine_type); pstmt.setInt(5, prep_time); pstmt.setInt(6, servings);
-                    pstmt.setInt(7, Integer.parseInt(recipeId));
-                    if (pstmt.executeUpdate() > 0) {
+                    pstmtUp = connUp.prepareStatement(sql);
+                    pstmtUp.setString(1, title);
+                    pstmtUp.setString(2, description);
+                    pstmtUp.setString(3, instructions);
+                    pstmtUp.setString(4, cuisine_type);
+                    pstmtUp.setInt(5, prep_time);
+                    pstmtUp.setInt(6, servings);
+                    pstmtUp.setInt(7, recipeId);
+                    if (pstmtUp.executeUpdate() > 0) {
                         message = "✅ Recipe updated successfully!";
                         messageType = "success";
+                        // Reload current values after update
+                        currentTitle = title;
+                        currentDescription = description;
+                        currentInstructions = instructions;
+                        currentCuisine = cuisine_type;
+                        currentPrepTime = String.valueOf(prep_time);
+                        currentServings = String.valueOf(servings);
                     } else {
                         message = "❌ No changes or recipe not found.";
                         messageType = "error";
@@ -83,63 +161,23 @@
                     message = "❌ Database error: " + e.getMessage();
                     messageType = "error";
                 } finally {
-                    if (pstmt != null) try { pstmt.close(); } catch(Exception e) {}
-                    if (conn != null) DatabaseConnection.closeConnection(conn);
+                    if (pstmtUp != null) try { pstmtUp.close(); } catch(Exception e) {}
+                    if (connUp != null) DatabaseConnection.closeConnection(connUp);
                 }
             } else {
                 messageType = "error";
             }
         }
-
-        if (!message.isEmpty()) { %>
-            <div class="<%= messageType %>"><%= message %></div>
-        <% }
-        if (!errors.isEmpty()) { %>
-            <div class="error"><strong>Please correct:</strong><ul class="error-list"><% for(String err:errors){ %><li><%= err %></li><% } %></ul></div>
-        <% }
-
-        // Show dropdown or form
-        if (recipeId == null || (request.getMethod().equalsIgnoreCase("POST") && messageType.equals("success"))) { %>
-        <form method="get">
-            <label>Select Recipe to Update:</label>
-            <select name="recipe_id" required>
-                <option value="">-- Select Recipe --</option>
-                <%
-                Connection conn = null; Statement stmt = null; ResultSet rs = null;
-                try {
-                    conn = DatabaseConnection.getConnection();
-                    stmt = conn.createStatement();
-                    rs = stmt.executeQuery("SELECT id, title FROM airg_recipes ORDER BY id");
-                    while(rs.next()) out.println("<option value='" + rs.getInt("id") + "'>" + rs.getString("title") + " (ID: " + rs.getInt("id") + ")</option>");
-                } catch(Exception e) { out.println("<option disabled>Error loading recipes</option>"); }
-                finally { if(rs != null) try { rs.close(); } catch(Exception e) {} if(stmt != null) try { stmt.close(); } catch(Exception e) {} if(conn != null) DatabaseConnection.closeConnection(conn); }
-                %>
-            </select>
-            <input type="submit" value="Load Recipe">
-        </form>
-        <%
-        } else if (recipeId != null && !recipeId.isEmpty()) {
-            if (request.getMethod().equalsIgnoreCase("GET") || (errors.isEmpty() && messageType.equals("success"))) {
-                Connection conn = null; PreparedStatement pstmt = null; ResultSet rs = null;
-                try {
-                    conn = DatabaseConnection.getConnection();
-                    pstmt = conn.prepareStatement("SELECT * FROM airg_recipes WHERE id=?");
-                    pstmt.setInt(1, Integer.parseInt(recipeId));
-                    rs = pstmt.executeQuery();
-                    if (rs.next()) {
-                        currentTitle = rs.getString("title");
-                        currentDescription = rs.getString("description") != null ? rs.getString("description") : "";
-                        currentInstructions = rs.getString("instructions");
-                        currentCuisine = rs.getString("cuisine_type") != null ? rs.getString("cuisine_type") : "";
-                        currentPrepTime = String.valueOf(rs.getInt("prep_time"));
-                        currentServings = String.valueOf(rs.getInt("servings"));
-                    } else { out.println("<p class='error'>Recipe not found.</p>"); return; }
-                } catch(Exception e) { out.println("<p class='error'>Error: " + e.getMessage() + "</p>"); return; }
-                finally { if(rs != null) try { rs.close(); } catch(Exception e) {} if(pstmt != null) try { pstmt.close(); } catch(Exception e) {} if(conn != null) DatabaseConnection.closeConnection(conn); }
-            }
         %>
+
+        <% if (!message.isEmpty()) { %>
+            <div class="<%= messageType %>"><%= message %></div>
+        <% } %>
+        <% if (!errors.isEmpty()) { %>
+            <div class="error"><strong>Please correct:</strong><ul class="error-list"><% for(String err:errors){ %><li><%= err %></li><% } %></ul></div>
+        <% } %>
+
         <form method="post">
-            <input type="hidden" name="recipe_id" value="<%= recipeId %>">
             <label>Title *:</label>
             <input type="text" name="title" value="<%= currentTitle %>" required>
             <label>Description:</label>
@@ -154,7 +192,6 @@
             <input type="number" name="servings" min="1" value="<%= currentServings %>" required>
             <input type="submit" value="Update Recipe">
         </form>
-        <% } %>
     </div>
 </body>
-</html> 
+</html>

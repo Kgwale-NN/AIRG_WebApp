@@ -4,6 +4,7 @@
 <%
     String userRole = (String) session.getAttribute("userRole");
     boolean isAdmin = "admin".equals(userRole);
+    int loggedUserId = (Integer) session.getAttribute("userId");
 %>
 <!DOCTYPE html>
 <html>
@@ -28,57 +29,65 @@
 
     <%
     Connection conn = null;
-    Statement stmt = null;
+    PreparedStatement pstmt = null;
     ResultSet rs = null;
     try {
         conn = DatabaseConnection.getConnection();
-        stmt = conn.createStatement();
-        String sql = "SELECT r.id, u.name AS user_name, u.id AS user_id, " +
-                     "rec.title AS recipe_title, rec.id AS recipe_id, " +
-                     "r.rating, r.review, r.rated_date AS rated_date " +
-                     "FROM airg_ratings r " +
-                     "JOIN airg_users u ON r.user_id = u.id " +
-                     "JOIN airg_recipes rec ON r.recipe_id = rec.id " +
-                     "ORDER BY r.id DESC";
-        rs = stmt.executeQuery(sql);
+        if (isAdmin) {
+            String sql = "SELECT r.id, u.name AS user_name, u.id AS user_id, " +
+                         "rec.title AS recipe_title, rec.id AS recipe_id, " +
+                         "r.rating, r.review, r.rated_date " +
+                         "FROM airg_ratings r " +
+                         "JOIN airg_users u ON r.user_id = u.id " +
+                         "JOIN airg_recipes rec ON r.recipe_id = rec.id " +
+                         "ORDER BY r.id DESC";
+            pstmt = conn.prepareStatement(sql);
+        } else {
+            String sql = "SELECT r.id, u.name AS user_name, u.id AS user_id, " +
+                         "rec.title AS recipe_title, rec.id AS recipe_id, " +
+                         "r.rating, r.review, r.rated_date " +
+                         "FROM airg_ratings r " +
+                         "JOIN airg_users u ON r.user_id = u.id " +
+                         "JOIN airg_recipes rec ON r.recipe_id = rec.id " +
+                         "WHERE r.user_id = ? " +
+                         "ORDER BY r.id DESC";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, loggedUserId);
+        }
+        rs = pstmt.executeQuery();
     %>
     <table>
-        <tr>
-            <th>ID</th>
-            <th>User</th>
-            <th>Recipe</th>
-            <th>Rating</th>
-            <th>Review</th>
-            <th>Date</th>
-            <th>Actions</th>
-        </tr>
-        <% while (rs.next()) {
-            int ratingId = rs.getInt("id");
-            String userName = rs.getString("user_name");
-            int userId = rs.getInt("user_id");
-            String recipeTitle = rs.getString("recipe_title");
-            int recipeId = rs.getInt("recipe_id");
-            int rating = rs.getInt("rating");
-            String review = rs.getString("review");
-            Timestamp ratedDate = rs.getTimestamp("rated_date");
-        %>
-        <tr>
-            <td><%= ratingId %></td>
-            <td><%= userName %> (ID <%= userId %>)</td>
-            <td><%= recipeTitle %> (ID <%= recipeId %>)</td>
-            <td><%= rating %> / 5</td>
-            <td><%= review != null ? review : "-" %></td>
-            <td><%= ratedDate != null ? ratedDate.toString().substring(0,19) : "-" %></td>
-            <td>
-                <% if (isAdmin) { %>
-                    <a href="updateRating.jsp?id=<%= ratingId %>" class="action-link">✏️ Edit</a>
-                    <a href="deleteRating.jsp?id=<%= ratingId %>" class="action-link" onclick="return confirm('Delete this rating?')">🗑️ Delete</a>
-                <% } else { %>
-                    --
-                <% } %>
-            </td>
-        </tr>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>User</th>
+                <th>Recipe</th>
+                <th>Rating</th>
+                <th>Review</th>
+                <th>Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        <% while (rs.next()) { %>
+            <tr>
+                <td><%= rs.getInt("id") %></td>
+                <td><%= rs.getString("user_name") %> (ID <%= rs.getInt("user_id") %>)</td>
+                <td><%= rs.getString("recipe_title") %> (ID <%= rs.getInt("recipe_id") %>)</td>
+                <td><%= rs.getInt("rating") %> / 5</td>
+                <td><%= rs.getString("review") != null ? rs.getString("review") : "-" %></td>
+                <td><%= rs.getTimestamp("rated_date") != null ? rs.getTimestamp("rated_date").toString().substring(0,19) : "-" %></td>
+                <td>
+                    <% if (isAdmin) { %>
+                        <a href="updateRating.jsp?id=<%= rs.getInt("id") %>" class="action-link">✏️ Edit</a>
+                        <a href="deleteRating.jsp?id=<%= rs.getInt("id") %>" class="action-link" onclick="return confirm('Delete this rating?')">🗑️ Delete</a>
+                    <% } else { %>
+                        --
+                    <% } %>
+                </td>
+            </tr>
         <% } %>
+        </tbody>
     </table>
     <%
     } catch (Exception e) {
@@ -86,7 +95,7 @@
         e.printStackTrace();
     } finally {
         if (rs != null) try { rs.close(); } catch (Exception e) {}
-        if (stmt != null) try { stmt.close(); } catch (Exception e) {}
+        if (pstmt != null) try { pstmt.close(); } catch (Exception e) {}
         if (conn != null) DatabaseConnection.closeConnection(conn);
     }
     %>

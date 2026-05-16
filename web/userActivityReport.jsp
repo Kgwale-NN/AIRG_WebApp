@@ -58,9 +58,10 @@
             conn = DatabaseConnection.getConnection();
             StringBuilder sql = new StringBuilder();
             sql.append("SELECT u.id, u.name, u.email, u.role, ");
-            sql.append("(SELECT COUNT(*) FROM airg_recipes WHERE created_by = u.id AND created_date BETWEEN ? AND ?) as recipes_added, ");
-            sql.append("(SELECT COUNT(*) FROM airg_ratings WHERE user_id = u.id AND rated_date BETWEEN ? AND ?) as ratings_given, ");
-            sql.append("(SELECT COUNT(*) FROM airg_favorites WHERE user_id = u.id AND added_date BETWEEN ? AND ?) as favorites_added ");
+            // ✅ FIX: Use DATE(column) to compare only the date part, ignoring time
+            sql.append("(SELECT COUNT(*) FROM airg_recipes WHERE created_by = u.id AND DATE(created_date) BETWEEN ? AND ?) as recipes_added, ");
+            sql.append("(SELECT COUNT(*) FROM airg_ratings WHERE user_id = u.id AND DATE(rated_date) BETWEEN ? AND ?) as ratings_given, ");
+            sql.append("(SELECT COUNT(*) FROM airg_favorites WHERE user_id = u.id AND DATE(added_date) BETWEEN ? AND ?) as favorites_added ");
             sql.append("FROM airg_users u WHERE 1=1 ");
             if (!isAdmin) {
                 sql.append(" AND u.id = ? ");

@@ -4,6 +4,7 @@
 <%
     String userRole = (String) session.getAttribute("userRole");
     boolean isAdmin = "admin".equals(userRole);
+    int loggedUserId = (Integer) session.getAttribute("userId");
 %>
 <!DOCTYPE html>
 <html>
@@ -28,21 +29,33 @@
 
     <%
     Connection conn = null;
-    Statement stmt = null;
+    PreparedStatement pstmt = null;
     ResultSet rs = null;
     try {
         conn = DatabaseConnection.getConnection();
-        stmt = conn.createStatement();
-        String sql = "SELECT f.user_id, u.name as user_name, f.recipe_id, r.title as recipe_title " +
-                     "FROM airg_favorites f " +
-                     "JOIN airg_users u ON f.user_id = u.id " +
-                     "JOIN airg_recipes r ON f.recipe_id = r.id " +
-                     "ORDER BY u.name";
-        rs = stmt.executeQuery(sql);
+        String sql;
+        if (isAdmin) {
+            sql = "SELECT f.user_id, u.name as user_name, f.recipe_id, r.title as recipe_title " +
+                  "FROM airg_favorites f " +
+                  "JOIN airg_users u ON f.user_id = u.id " +
+                  "JOIN airg_recipes r ON f.recipe_id = r.id " +
+                  "ORDER BY u.name";
+            pstmt = conn.prepareStatement(sql);
+        } else {
+            sql = "SELECT f.user_id, u.name as user_name, f.recipe_id, r.title as recipe_title " +
+                  "FROM airg_favorites f " +
+                  "JOIN airg_users u ON f.user_id = u.id " +
+                  "JOIN airg_recipes r ON f.recipe_id = r.id " +
+                  "WHERE f.user_id = ? " +
+                  "ORDER BY u.name";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, loggedUserId);
+        }
+        rs = pstmt.executeQuery();
     %>
     <table>
         <tr><th>User</th><th>Recipe</th><th>Actions</th></tr>
-        <% while(rs.next()) { %>
+        <% while (rs.next()) { %>
         <tr>
             <td><%= rs.getString("user_name") %> (ID <%= rs.getInt("user_id") %>)</td>
             <td><%= rs.getString("recipe_title") %> (ID <%= rs.getInt("recipe_id") %>)</td>
@@ -58,12 +71,12 @@
         <% } %>
     </table>
     <%
-    } catch(Exception e) {
+    } catch (Exception e) {
         out.println("<p style='color:red'>Error: " + e.getMessage() + "</p>");
     } finally {
-        if(rs != null) try { rs.close(); } catch(Exception e) {}
-        if(stmt != null) try { stmt.close(); } catch(Exception e) {}
-        if(conn != null) DatabaseConnection.closeConnection(conn);
+        if (rs != null) try { rs.close(); } catch (Exception e) {}
+        if (pstmt != null) try { pstmt.close(); } catch (Exception e) {}
+        if (conn != null) DatabaseConnection.closeConnection(conn);
     }
     %>
 </body>

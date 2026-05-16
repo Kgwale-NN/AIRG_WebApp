@@ -4,6 +4,8 @@
 <%
     String userRole = (String) session.getAttribute("userRole");
     boolean isAdmin = "admin".equals(userRole);
+    int loggedUserId = (Integer) session.getAttribute("userId");
+    boolean isLoggedIn = (loggedUserId != 0);
 %>
 <!DOCTYPE html>
 <html>
@@ -23,7 +25,7 @@
 <body>
     <h1>All Recipes</h1>
     <a href="index.jsp" class="back-link">← Back to Dashboard</a>
-    <% if (isAdmin) { %>
+    <% if (isLoggedIn) { %>
         <a href="insertRecipe.jsp" style="margin-left:20px;">➕ Add New Recipe</a>
     <% } %>
 
@@ -34,7 +36,7 @@
     try {
         conn = DatabaseConnection.getConnection();
         stmt = conn.createStatement();
-        String sql = "SELECT r.id, r.title, r.cuisine_type, r.prep_time, r.servings, u.name as chef " +
+        String sql = "SELECT r.id, r.title, r.cuisine_type, r.prep_time, r.servings, u.name as chef, r.created_by " +
                      "FROM airg_recipes r " +
                      "LEFT JOIN airg_users u ON r.created_by = u.id " +
                      "ORDER BY r.id";
@@ -44,7 +46,10 @@
         <tr>
             <th>ID</th><th>Title</th><th>Cuisine</th><th>Prep Time</th><th>Servings</th><th>Created By</th><th>Actions</th>
         </tr>
-        <% while(rs.next()) { %>
+        <% while(rs.next()) {
+            int recipeOwnerId = rs.getInt("created_by");
+            boolean canEditDelete = isAdmin || (isLoggedIn && recipeOwnerId == loggedUserId);
+        %>
         <tr>
             <td><%= rs.getInt("id") %></td>
             <td><%= rs.getString("title") %></td>
@@ -53,9 +58,9 @@
             <td><%= rs.getInt("servings") %></td>
             <td><%= rs.getString("chef") != null ? rs.getString("chef") : "Unknown" %></td>
             <td>
-                <% if (isAdmin) { %>
-                    <a href="updateRecipe.jsp?id=<%= rs.getInt("id") %>" class="action-link">✏️ Edit</a>
-                    <a href="deleteRecipe.jsp?id=<%= rs.getInt("id") %>" class="action-link" onclick="return confirm('Delete this recipe?')">🗑️ Delete</a>
+                <% if (canEditDelete) { %>
+                    <a href="updateRecipe.jsp?recipe_id=<%= rs.getInt("id") %>" class="action-link">✏️ Edit</a>
+                    <a href="deleteRecipe.jsp?recipe_id=<%= rs.getInt("id") %>" class="action-link" onclick="return confirm('Delete this recipe?')">🗑️ Delete</a>
                 <% } else { %>
                     --
                 <% } %>

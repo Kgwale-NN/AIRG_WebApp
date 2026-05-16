@@ -25,18 +25,35 @@
         <label>Select Cuisine Type:</label>
         <select name="cuisine">
             <option value="">-- All Cuisines --</option>
-            <option value="Italian" <%= "Italian".equals(request.getParameter("cuisine")) ? "selected" : "" %>>Italian</option>
-            <option value="Asian" <%= "Asian".equals(request.getParameter("cuisine")) ? "selected" : "" %>>Asian</option>
-            <option value="Healthy" <%= "Healthy".equals(request.getParameter("cuisine")) ? "selected" : "" %>>Healthy</option>
-            <option value="Breakfast" <%= "Breakfast".equals(request.getParameter("cuisine")) ? "selected" : "" %>>Breakfast</option>
-            <option value="Casual" <%= "Casual".equals(request.getParameter("cuisine")) ? "selected" : "" %>>Casual</option>
-            <option value="American" <%= "American".equals(request.getParameter("cuisine")) ? "selected" : "" %>>American</option>
+            <%
+                Connection connCuisine = null;
+                Statement stmtCuisine = null;
+                ResultSet rsCuisine = null;
+                String selectedCuisine = request.getParameter("cuisine");
+                try {
+                    connCuisine = DatabaseConnection.getConnection();
+                    stmtCuisine = connCuisine.createStatement();
+                    // Get distinct cuisine types from existing recipes (ignore null/empty)
+                    rsCuisine = stmtCuisine.executeQuery("SELECT DISTINCT cuisine_type FROM airg_recipes WHERE cuisine_type IS NOT NULL AND cuisine_type != '' ORDER BY cuisine_type");
+                    while (rsCuisine.next()) {
+                        String cuisine = rsCuisine.getString("cuisine_type");
+                        String selected = (cuisine.equals(selectedCuisine)) ? "selected" : "";
+                        out.println("<option value='" + cuisine + "' " + selected + ">" + cuisine + "</option>");
+                    }
+                } catch (Exception e) {
+                    out.println("<option disabled>Error loading cuisines</option>");
+                } finally {
+                    if (rsCuisine != null) try { rsCuisine.close(); } catch(Exception e) {}
+                    if (stmtCuisine != null) try { stmtCuisine.close(); } catch(Exception e) {}
+                    if (connCuisine != null) DatabaseConnection.closeConnection(connCuisine);
+                }
+            %>
         </select>
         <input type="submit" value="Filter">
     </form>
 
     <%
-        String selectedCuisine = request.getParameter("cuisine");
+        // Now display recipes based on selected cuisine (if any)
         Connection conn = null;
         Statement stmt = null;
         ResultSet rs = null;
@@ -68,7 +85,7 @@
         <%
             }
             if (!hasResults) {
-                out.println("<tr><td colspan='5'>No recipes found for the selected cuisine.</td></tr>");
+                out.println("<tr><td colspan='5'>No recipes found for the selected cuisine.</div>\n</body>\n</html>");
             }
         %>
     </table>
@@ -83,8 +100,8 @@
     %>
 
     <div class="info">
-        <strong>Note:</strong> This filter uses the <code>cuisine_type</code> column in the <code>airg_recipes</code> table.
-        You can add more cuisine types or extend to dietary restrictions by adding new columns or a separate table.
+        <strong>Note:</strong> Cuisine options are dynamically loaded from existing recipes.  
+        If you add a new cuisine type (e.g., "African"), it will automatically appear here.
     </div>
     <a href="index.jsp" class="back-link">← Back to Dashboard</a>
 </div>

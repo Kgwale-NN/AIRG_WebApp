@@ -1,6 +1,12 @@
 <%@ page import="java.sql.*, airg.DatabaseConnection, java.util.*" %>
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ include file="WEB-INF/adminCheck.jsp" %>
+<%@ include file="WEB-INF/loginCheck.jsp" %>   <!-- ✅ changed from adminCheck to loginCheck -->
+<%
+    int loggedUserId = (Integer) session.getAttribute("userId");
+    String userRole = (String) session.getAttribute("userRole");
+    boolean isAdmin = "admin".equals(userRole);
+    String loggedUserName = (String) session.getAttribute("userName");
+%>
 <!DOCTYPE html>
 <html>
 <head>
@@ -14,6 +20,7 @@
         .error { background: #f8d7da; padding: 10px; margin-bottom: 20px; }
         .back-link { color: #ff6b35; text-decoration: none; display: inline-block; margin-bottom: 20px; }
         .error-list { margin: 0 0 10px 0; padding-left: 20px; }
+        .user-info { background: #eee; padding: 10px; margin: 8px 0 20px 0; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -25,7 +32,7 @@
         String messageType = "";
         List<String> errors = new ArrayList<String>();
 
-        String selectedUserId = "";
+        String selectedUserId = isAdmin ? "" : String.valueOf(loggedUserId);
         String selectedRecipeId = "";
         String selectedRating = "";
         String enteredReview = "";
@@ -36,12 +43,18 @@
             String ratingStr = request.getParameter("rating");
             String review = request.getParameter("review");
 
-            selectedUserId = userIdStr != null ? userIdStr : "";
-            selectedRecipeId = recipeIdStr != null ? recipeIdStr : "";
-            selectedRating = ratingStr != null ? ratingStr : "";
-            enteredReview = review != null ? review : "";
+            // For regular users, ignore submitted user_id and use session user ID
+            if (!isAdmin) {
+                userIdStr = String.valueOf(loggedUserId);
+                selectedUserId = userIdStr;
+            } else {
+                selectedUserId = (userIdStr != null) ? userIdStr : "";
+            }
+            selectedRecipeId = (recipeIdStr != null) ? recipeIdStr : "";
+            selectedRating = (ratingStr != null) ? ratingStr : "";
+            enteredReview = (review != null) ? review : "";
 
-            // --- 1. Empty fields ---
+            // --- Empty fields ---
             if (userIdStr == null || userIdStr.trim().isEmpty())
                 errors.add("Please select a user.");
             if (recipeIdStr == null || recipeIdStr.trim().isEmpty())
@@ -51,7 +64,7 @@
 
             int userId = 0, recipeId = 0, rating = 0;
 
-            // --- 2. Numeric validation ---
+            // --- Numeric validation ---
             if (userIdStr != null && !userIdStr.trim().isEmpty()) {
                 try { userId = Integer.parseInt(userIdStr); }
                 catch (NumberFormatException e) { errors.add("Invalid user selection."); }
@@ -70,11 +83,11 @@
                 }
             }
 
-            // --- 3. Optional review length (max 500) ---
+            // --- Optional review length ---
             if (review != null && review.length() > 500)
                 errors.add("Review is too long (max 500 characters).");
 
-            // --- 4. Duplicate rating check (same user & recipe) ---
+            // --- Duplicate rating check ---
             if (errors.isEmpty()) {
                 Connection connCheck = null;
                 PreparedStatement pstmtCheck = null;
@@ -86,7 +99,7 @@
                     pstmtCheck.setInt(2, recipeId);
                     rsCheck = pstmtCheck.executeQuery();
                     if (rsCheck.next())
-                        errors.add("This user has already rated this recipe. Use Edit instead.");
+                        errors.add("You have already rated this recipe. Use Edit instead.");
                 } catch (Exception e) { /* ignore */ }
                 finally {
                     if (rsCheck != null) try { rsCheck.close(); } catch(Exception e) {}
@@ -101,6 +114,7 @@
                 PreparedStatement pstmt = null;
                 try {
                     conn = DatabaseConnection.getConnection();
+                    // rated_date will be set automatically if column has DEFAULT CURRENT_TIMESTAMP
                     String sql = "INSERT INTO airg_ratings (user_id, recipe_id, rating, review) VALUES (?, ?, ?, ?)";
                     pstmt = conn.prepareStatement(sql);
                     pstmt.setInt(1, userId);
@@ -111,8 +125,10 @@
                     if (res > 0) {
                         message = "✅ Rating added successfully!";
                         messageType = "success";
-                        // Clear form
-                        selectedUserId = selectedRecipeId = selectedRating = enteredReview = "";
+                        selectedRecipeId = "";
+                        selectedRating = "";
+                        enteredReview = "";
+                        if (isAdmin) selectedUserId = "";
                     } else {
                         message = "❌ Failed to add rating.";
                         messageType = "error";
@@ -145,24 +161,30 @@
         <% } %>
 
         <form method="post">
-            <label>User:</label>
-            <select name="user_id" required>
-                <option value="">-- Select User --</option>
-                <%
-                Connection conn2 = null; Statement stmt2 = null; ResultSet rs2 = null;
-                try {
-                    conn2 = DatabaseConnection.getConnection();
-                    stmt2 = conn2.createStatement();
-                    rs2 = stmt2.executeQuery("SELECT id, name FROM airg_users ORDER BY name");
-                    while (rs2.next()) {
-                        int uid = rs2.getInt("id");
-                        String selected = (selectedUserId.equals(String.valueOf(uid))) ? "selected" : "";
-                        out.println("<option value='" + uid + "' " + selected + ">" + rs2.getString("name") + "</option>");
-                    }
-                } catch (Exception e) { out.println("<option>Error loading users</option>"); }
-                finally { if (rs2 != null) try { rs2.close(); } catch(Exception e) {} if (stmt2 != null) try { stmt2.close(); } catch(Exception e) {} if (conn2 != null) DatabaseConnection.closeConnection(conn2); }
-                %>
-            </select>
+            <% if (isAdmin) { %>
+                <label>User:</label>
+                <select name="user_id" required>
+                    <option value="">-- Select User --</option>
+                    <%
+                    Connection conn2 = null; Statement stmt2 = null; ResultSet rs2 = null;
+                    try {
+                        conn2 = DatabaseConnection.getConnection();
+                        stmt2 = conn2.createStatement();
+                        rs2 = stmt2.executeQuery("SELECT id, name FROM airg_users ORDER BY name");
+                        while (rs2.next()) {
+                            int uid = rs2.getInt("id");
+                            String selected = (selectedUserId.equals(String.valueOf(uid))) ? "selected" : "";
+                            out.println("<option value='" + uid + "' " + selected + ">" + rs2.getString("name") + "</option>");
+                        }
+                    } catch (Exception e) { out.println("<option>Error loading users</option>"); }
+                    finally { if (rs2 != null) try { rs2.close(); } catch(Exception e) {} if (stmt2 != null) try { stmt2.close(); } catch(Exception e) {} if (conn2 != null) DatabaseConnection.closeConnection(conn2); }
+                    %>
+                </select>
+            <% } else { %>
+                <label>User:</label>
+                <input type="hidden" name="user_id" value="<%= loggedUserId %>">
+                <div class="user-info"><%= loggedUserName %> (you)</div>
+            <% } %>
 
             <label>Recipe:</label>
             <select name="recipe_id" required>
@@ -184,7 +206,7 @@
             </select>
 
             <label>Rating (1-5):</label>
-            <input type="number" name="rating" min="1" max="5" value="<%= selectedRating.isEmpty() ? "" : selectedRating %>" required>
+            <input type="number" name="rating" min="1" max="5" value="<%= selectedRating %>" required>
 
             <label>Review (optional):</label>
             <textarea name="review" rows="3"><%= enteredReview %></textarea>
